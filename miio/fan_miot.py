@@ -11,6 +11,7 @@ MODEL_FAN_P9 = "dmaker.fan.p9"
 MODEL_FAN_P10 = "dmaker.fan.p10"
 MODEL_FAN_P11 = "dmaker.fan.p11"
 MODEL_FAN_1C = "dmaker.fan.1c"
+MODEL_FAN_ZA5 = "zhimi.fan.za5"
 
 MIOT_MAPPING = {
     MODEL_FAN_1C: {
@@ -67,12 +68,34 @@ MIOT_MAPPING = {
         "power_off_time": {"siid": 3, "piid": 1},
         "set_move": {"siid": 6, "piid": 1},
     },
+    MODEL_FAN_ZA5: {
+        # https://miot-spec.org/miot-spec-v2/instance?type=urn:miot-spec-v2:device:fan:0000A005:zhimi-za5:1
+        "power": {"siid": 2, "piid": 1},
+        "fan_level": {"siid": 2, "piid": 2},
+        "swing_mode": {"siid": 2, "piid": 3},
+        "swing_mode_angle": {"siid": 2, "piid": 5},
+        "mode": {"siid": 2, "piid": 7},
+        "power_off_time": {"siid": 2, "piid": 10},
+        "anion": {"siid": 2, "piid": 11},
+        "child_lock": {"siid": 3, "piid": 1},
+        "light": {"siid": 4, "piid": 3},
+        "buzzer": {"siid": 5, "piid": 1},
+        "buttons_pressed": {"siid": 6, "piid": 1},
+        "battery_supported": {"siid": 6, "piid": 2},
+        "set_move": {"siid": 6, "piid": 3},
+        "speed_rpm": {"siid": 6, "piid": 4},
+        "powersupply_attached": {"siid": 6, "piid": 5},
+        "fan_speed": {"siid": 6, "piid": 8},
+        "humidity": {"siid": 7, "piid": 1},
+        "temperature": {"siid": 7, "piid": 7},
+    },
 }
 
 SUPPORTED_ANGLES = {
     MODEL_FAN_P9: [30, 60, 90, 120, 150],
     MODEL_FAN_P10: [30, 60, 90, 120, 140],
     MODEL_FAN_P11: [30, 60, 90, 120, 140],
+    MODEL_FAN_ZA5: [30, 60, 90, 120],
 }
 
 
@@ -525,3 +548,260 @@ class Fan1C(MiotDevice):
             raise FanException("Invalid value for a delayed turn off: %s" % minutes)
 
         return self.set_property("power_off_time", minutes)
+
+
+class OperationModeFanZA5(enum.Enum):
+    Nature = 0
+    Normal = 1
+
+
+class FanStatusZA5(DeviceStatus):
+    """Container for status reports for FanZA5."""
+
+    def __init__(self, data: Dict[str, Any]) -> None:
+        self.data = data
+
+    # TODO: Docstrings.
+    @property
+    def anion(self) -> bool:
+        return self.data["anion"]
+
+    @property
+    def battery_supported(self) -> bool:
+        return self.data["battery_supported"]
+
+    @property
+    def buttons_pressed(self) -> str:
+        code = self.data["buttons_pressed"]
+        if code == 0:
+            return "None"
+        if code == 1:
+            return "Power"
+        if code == 2:
+            return "Swing"
+        return "Unknown"
+
+    @property
+    def buzzer(self) -> bool:
+        return self.data["buzzer"]
+
+    @property
+    def child_lock(self) -> bool:
+        return self.data["child_lock"]
+
+    @property
+    def fan_level(self) -> int:
+        return self.data["fan_level"]
+
+    @property
+    def fan_speed(self) -> int:
+        return self.data["fan_speed"]
+
+    @property
+    def humidity(self) -> int:
+        return self.data["humidity"]
+
+    @property
+    def light(self) -> int:
+        return self.data["light"]
+
+    @property
+    def mode(self) -> OperationMode:
+        return OperationMode[OperationModeFanZA5(self.data["mode"]).name]
+
+    @property
+    def power(self) -> bool:
+        return self.data["power"]
+
+    @property
+    def power_off_time(self) -> int:
+        return self.data["power_off_time"]
+
+    @property
+    def powersupply_attached(self) -> bool:
+        return self.data["powersupply_attached"]
+
+    @property
+    def speed_rpm(self) -> int:
+        return self.data["speed_rpm"]
+
+    @property
+    def swing_mode(self) -> bool:
+        return self.data["swing_mode"]
+
+    @property
+    def swing_mode_angle(self) -> int:
+        return self.data["swing_mode_angle"]
+
+    @property
+    def temperature(self) -> Any:
+        return self.data["temperature"]
+
+
+class FanZA5(MiotDevice):
+    mapping = MIOT_MAPPING[MODEL_FAN_ZA5]
+
+    def __init__(
+        self,
+        ip: str = None,
+        token: str = None,
+        start_id: int = 0,
+        debug: int = 0,
+        lazy_discover: bool = True,
+        model: str = MODEL_FAN_ZA5,
+    ) -> None:
+        super().__init__(ip, token, start_id, debug, lazy_discover)
+        self.model = model
+
+    @command(
+        default_output=format_output(
+            "",
+            "Anion: {result.anion}\n"
+            "Battery Supported: {result.battery_supported}\n"
+            "Buttons Pressed: {result.buttons_pressed}\n"
+            "Buzzer: {result.buzzer}\n"
+            "Child Lock: {result.child_lock}\n"
+            "Fan Level: {result.fan_level}\n"
+            "Fan Speed: {result.fan_speed}\n"
+            "Humidity: {result.humidity}\n"
+            "Light: {result.light}\n"
+            "Mode: {result.mode.name}\n"
+            "Power: {result.power}\n"
+            "Power Off Time: {result.power_off_time}\n"
+            "Powersupply Attached: {result.powersupply_attached}\n"
+            "Speed RPM: {result.speed_rpm}\n"
+            "Swing Mode: {result.swing_mode}\n"
+            "Swing Mode Angle: {result.swing_mode_angle}\n"
+            "Temperature: {result.temperature}\n",
+        )
+    )
+    def status(self):
+        """Retrieve properties."""
+        return FanStatusZA5(
+            {
+                prop["did"]: prop["value"] if prop["code"] == 0 else None
+                for prop in self.get_properties_for_mapping()
+            }
+        )
+
+    @command(default_output=format_output("Powering on"))
+    def on(self):
+        """Power on."""
+        return self.set_property("power", True)
+
+    @command(default_output=format_output("Powering off"))
+    def off(self):
+        """Power off."""
+        return self.set_property("power", False)
+
+    @command(
+        click.argument("anion", type=bool),
+        default_output=format_output(
+            lambda anion: "Turning on anion" if anion else "Turning off anion"
+        ),
+    )
+    def set_anion(self, anion: bool):
+        """Set anion on/off."""
+        return self.set_property("anion", anion)
+
+    @command(
+        click.argument("speed", type=int),
+        default_output=format_output("Setting speed to {speed}%"),
+    )
+    def set_speed(self, speed: int):
+        """Set fan speed."""
+        if speed < 0 or speed > 100:
+            raise FanException("Invalid speed: %s" % speed)
+
+        return self.set_property("fan_speed", speed)
+
+    @command(
+        click.argument("angle", type=int),
+        default_output=format_output("Setting angle to {angle}"),
+    )
+    def set_angle(self, angle: int):
+        """Set the oscillation angle."""
+        if angle not in SUPPORTED_ANGLES[self.model]:
+            raise FanException(
+                "Unsupported angle. Supported values: "
+                + ", ".join("{0}".format(i) for i in SUPPORTED_ANGLES[self.model])
+            )
+
+        return self.set_property("swing_mode_angle", angle)
+
+    @command(
+        click.argument("oscillate", type=bool),
+        default_output=format_output(
+            lambda oscillate: "Turning on oscillate"
+            if oscillate
+            else "Turning off oscillate"
+        ),
+    )
+    def set_oscillate(self, oscillate: bool):
+        """Set oscillate on/off."""
+        if oscillate:
+            return self.set_property("swing_mode", True)
+        else:
+            return self.set_property("swing_mode", False)
+
+    @command(
+        click.argument("buzzer", type=bool),
+        default_output=format_output(
+            lambda buzzer: "Turning on buzzer" if buzzer else "Turning off buzzer"
+        ),
+    )
+    def set_buzzer(self, buzzer: bool):
+        """Set buzzer on/off."""
+        if buzzer:
+            return self.set_property("buzzer", True)
+        else:
+            return self.set_property("buzzer", False)
+
+    @command(
+        click.argument("lock", type=bool),
+        default_output=format_output(
+            lambda lock: "Turning on child lock" if lock else "Turning off child lock"
+        ),
+    )
+    def set_child_lock(self, lock: bool):
+        """Set child lock on/off."""
+        return self.set_property("child_lock", lock)
+
+    @command(
+        click.argument("light", type=int),
+        default_output=format_output("Setting light to {light}%"),
+    )
+    def set_light(self, light: int):
+        """Set indicator brightness."""
+        if light < 0 or light > 100:
+            raise FanException("Invalid light: %s" % light)
+
+        return self.set_property("light", light)
+
+    @command(
+        click.argument("mode", type=EnumType(OperationMode)),
+        default_output=format_output("Setting mode to '{mode.value}'"),
+    )
+    def set_mode(self, mode: OperationMode):
+        """Set mode."""
+        return self.set_property("mode", OperationModeFanZA5[mode.name].value)
+
+    @command(
+        click.argument("seconds", type=int),
+        default_output=format_output("Setting delayed turn off to {seconds} seconds"),
+    )
+    def delay_off(self, seconds: int):
+        """Set delay off seconds."""
+
+        if seconds < 0 or seconds > 10 * 60 * 60:
+            raise FanException("Invalid value for a delayed turn off: %s" % seconds)
+
+        return self.set_property("power_off_time", seconds)
+
+    @command(
+        click.argument("direction", type=EnumType(MoveDirection)),
+        default_output=format_output("Rotating the fan to the {direction}"),
+    )
+    def set_rotate(self, direction: MoveDirection):
+        """Rotate fan 7.5 degrees horizontally to given direction."""
+        return self.set_property("set_move", direction.name.lower())
